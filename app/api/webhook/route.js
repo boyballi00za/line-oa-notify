@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
+import { sendLineReply } from "@/lib/lineSend";
 
 function isValidSignature(rawBody, signature, secret) {
   if (!signature) return false;
@@ -32,6 +33,15 @@ export async function POST(request) {
       if (error) console.error("[webhook] insert failed:", error.message);
     } catch (e) {
       console.error("[webhook] error:", e instanceof Error ? e.message : e);
+    }
+  }
+
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (token) {
+    for (const event of events) {
+      const isGreetable = event.type === "message" || event.type === "follow";
+      if (!isGreetable || !event.replyToken || !event.source?.userId) continue;
+      await sendLineReply(token, event.replyToken, `User ID ของคุณคือ: ${event.source.userId}`);
     }
   }
 
