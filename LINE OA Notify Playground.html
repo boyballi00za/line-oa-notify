@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LINE OA Notify Playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { height: 100%; margin: 0; background: oklch(0.17 0.008 258); }
+  * { box-sizing: border-box; }
+  a { color: oklch(0.78 0.13 165); text-decoration: none; }
+  a:hover { color: oklch(0.88 0.11 165); }
+  input, textarea, button, select { font: inherit; }
+  input:focus, textarea:focus { outline: 1px solid oklch(0.72 0.12 165); }
+  ::placeholder { color: oklch(0.52 0.01 258); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: oklch(0.34 0.012 258); border-radius: 10px; }
+  #root { min-height: 100%; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<script>
+(function () {
+"use strict";
+
+var h = React.createElement;
+var useState = React.useState;
+
+// --- Simulation constants (design-time defaults from the Playground props panel) ---
+var LATENCY_MS = 420;
+var FAILURE_RATE = 15; // percent
+
+// --- Palette (matches the original design's oklch tokens) ---
+var C = {
+  bg: "oklch(0.17 0.008 258)",
+  text: "oklch(0.93 0.005 258)",
+  border: "oklch(0.28 0.01 258)",
+  panel: "oklch(0.2 0.009 258)",
+  panel2: "oklch(0.21 0.009 258)",
+  inputBg: "oklch(0.15 0.008 258)",
+  inputBorder: "oklch(0.31 0.01 258)",
+  dim: "oklch(0.62 0.01 258)",
+  dim2: "oklch(0.58 0.01 258)",
+  dim3: "oklch(0.66 0.01 258)",
+  dim4: "oklch(0.6 0.01 258)",
+  divider: "oklch(0.27 0.01 258)",
+  rowBorder: "oklch(0.24 0.01 258)",
+  green: "oklch(0.8 0.14 160)",
+  greenBright: "oklch(0.82 0.15 158)",
+  greenSlow: "oklch(0.62 0.07 160)",
+  greenDark: "oklch(0.18 0.02 160)",
+  red: "oklch(0.72 0.16 25)",
+  redBright: "oklch(0.7 0.16 25)",
+  orange: "oklch(0.78 0.13 75)",
+  warnBorder: "oklch(0.42 0.09 75)",
+  warnBg: "oklch(0.26 0.04 75)",
+  warnText: "oklch(0.86 0.08 80)"
+};
+
+function chip(active) {
+  return active
+    ? { b: "oklch(0.62 0.12 160)", g: "oklch(0.3 0.06 160)", f: "oklch(0.9 0.1 160)" }
+    : { b: "oklch(0.32 0.01 258)", g: "oklch(0.24 0.01 258)", f: "oklch(0.78 0.008 258)" };
+}
+
+function chipButtonStyle(c, extra) {
+  return Object.assign({
+    border: "1px solid " + c.b,
+    background: c.g,
+    color: c.f,
+    borderRadius: "8px",
+    padding: "8px 13px",
+    fontSize: "12.5px",
+    cursor: "pointer"
+  }, extra || {});
+}
+
+var mono = { fontFamily: "'JetBrains Mono', monospace" };
+
+var labelStyle = { fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: C.dim4 };
+var smallLabelStyle = { fontSize: "11px", color: C.dim4 };
+
+var inputStyle = {
+  background: C.inputBg,
+  border: "1px solid " + C.inputBorder,
+  borderRadius: "8px",
+  padding: "10px 12px",
+  color: C.text,
+  fontFamily: "'JetBrains Mono', monospace",
+  fontSize: "13px",
+  width: "100%"
+};
+
+var panelStyle = {
+  border: "1px solid " + C.border,
+  background: C.panel,
+  borderRadius: "12px",
+  padding: "16px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px"
+};
+
+var sectionTitleStyle = {
+  margin: 0,
+  fontSize: "13px",
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: C.dim3
+};
+
+var preStyle = {
+  margin: 0,
+  background: "oklch(0.14 0.008 258)",
+  border: "1px solid " + C.divider,
+  borderRadius: "8px",
+  padding: "12px",
+  fontFamily: "'JetBrains Mono', monospace",
+  fontSize: "11.5px",
+  lineHeight: "1.6",
+  overflow: "auto"
+};
+
+function StatCard(props) {
+  return h("div", {
+    style: {
+      border: "1px solid " + C.border,
+      background: C.panel2,
+      borderRadius: "10px",
+      padding: "8px 14px",
+      minWidth: "96px"
+    }
+  },
+    h("div", { style: { fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.08em", color: C.dim2 } }, props.label),
+    h("div", { style: Object.assign({ fontFamily: "'JetBrains Mono', monospace", fontSize: "19px", fontWeight: 500 }, props.color ? { color: props.color } : null) }, props.value)
+  );
+}
+
+var STICKER_PRESETS = [
+  { label: "446/1988", p: "446", i: "1988" },
+  { label: "446/1989", p: "446", i: "1989" },
+  { label: "789/10855", p: "789", i: "10855" },
+  { label: "11537/52002734", p: "11537", i: "52002734" }
+];
+
+function now() {
+  var d = new Date();
+  return [d.getHours(), d.getMinutes(), d.getSeconds()].map(function (n) { return String(n).padStart(2, "0"); }).join(":");
+}
+
+function App() {
+  var s0 = useState({
+    token: "",
+    channelId: "2004871553",
+    conn: "idle",
+    mode: "single",
+    singleId: "U4af4980629abcdef1234567890abcdef",
+    multiIds: "U4af4980629abcdef1234567890abcdef\nUb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6\nUcc11dd22ee33ff44aa55bb66cc77dd88",
+    type: "text",
+    text: "แจ้งเตือน: มีคำสั่งซื้อใหม่ #10428\nยอดรวม 1,290 บาท · ชำระแล้ว",
+    useQuick: true,
+    quick: [{ id: 1, label: "ดูคำสั่งซื้อ" }, { id: 2, label: "ปิดแจ้งเตือน" }],
+    packageId: "446",
+    stickerId: "1988",
+    imageUrl: "",
+    snippetTab: "curl",
+    sending: false,
+    last: null,
+    logs: []
+  });
+  var state = s0[0], setStateRaw = s0[1];
+  function setState(patch) {
+    setStateRaw(function (s) {
+      var p = typeof patch === "function" ? patch(s) : patch;
+      return Object.assign({}, s, p);
+    });
+  }
+  function pushLog(entry) {
+    setStateRaw(function (s) {
+      return Object.assign({}, s, { logs: [entry].concat(s.logs).slice(0, 40) });
+    });
+  }
+
+  function targets() {
+    if (state.mode === "single") return [state.singleId.trim()].filter(Boolean);
+    if (state.mode === "multi") return state.multiIds.split("\n").map(function (x) { return x.trim(); }).filter(Boolean);
+    return [];
+  }
+
+  function messages() {
+    var m;
+    if (state.type === "text") m = { type: "text", text: state.text };
+    else if (state.type === "sticker") m = { type: "sticker", packageId: state.packageId, stickerId: state.stickerId };
+    else m = {
+      type: "image",
+      originalContentUrl: state.imageUrl || "https://cdn.example.com/notify.png",
+      previewImageUrl: state.imageUrl || "https://cdn.example.com/notify-preview.png"
+    };
+    if (state.useQuick && state.quick.length) {
+      m.quickReply = {
+        items: state.quick.filter(function (q) { return q.label.trim(); }).map(function (q) {
+          return { type: "action", action: { type: "message", label: q.label, text: q.label } };
+        })
+      };
+    }
+    return [m];
+  }
+
+  function endpoint() {
+    var m = state.mode;
+    return m === "single" ? "/v2/bot/message/push" : m === "multi" ? "/v2/bot/message/multicast" : "/v2/bot/message/broadcast";
+  }
+
+  function payload() {
+    var m = state.mode;
+    var body = { messages: messages() };
+    if (m === "single") return Object.assign({ to: targets()[0] || "" }, body);
+    if (m === "multi") return Object.assign({ to: targets() }, body);
+    return body;
+  }
+
+  function send() {
+    if (state.sending) return;
+    var targetLabel = state.mode === "broadcast"
+      ? "all friends"
+      : state.mode === "multi"
+        ? targets().length + " userIds"
+        : (targets()[0] || "—").slice(0, 18) + "…";
+
+    if (!state.token.trim()) {
+      setState({ last: { ok: false, status: "401 Unauthorized", ms: 0, body: { message: "Authentication failed. Confirm that the access token in the authorization header is valid." } } });
+      pushLog({ id: Date.now(), time: now(), status: "401", color: C.redBright, target: targetLabel, latency: "—", detail: "missing channel access token" });
+      return;
+    }
+    if (state.mode !== "broadcast" && !targets().length) {
+      setState({ last: { ok: false, status: "400 Bad Request", ms: 0, body: { message: "The property, to, is required" } } });
+      pushLog({ id: Date.now(), time: now(), status: "400", color: C.orange, target: "—", latency: "—", detail: "ไม่มี userId ปลายทาง" });
+      return;
+    }
+
+    setState({ sending: true });
+    var base = LATENCY_MS;
+    var ms = Math.round(base * (0.7 + Math.random() * 0.6));
+    var currentMode = state.mode, currentType = state.type, currentUseQuick = state.useQuick, targetCount = targets().length;
+    setTimeout(function () {
+      var fail = Math.random() * 100 < FAILURE_RATE;
+      var reqId = "0" + Math.random().toString(16).slice(2, 10) + "-" + Math.random().toString(16).slice(2, 6);
+      var res = fail
+        ? { ok: false, status: "429 Too Many Requests", ms: ms, body: { message: "You have reached your monthly limit.", requestId: reqId } }
+        : { ok: true, status: "200 OK", ms: ms, body: { sentMessages: targetCount || 1, requestId: reqId } };
+      setState({ sending: false, last: res });
+      pushLog({
+        id: Date.now(),
+        time: now(),
+        status: fail ? "429" : "200",
+        color: fail ? C.redBright : C.green,
+        target: targetLabel,
+        latency: ms + "ms",
+        detail: fail ? "rate limited · retry ภายหลัง" : currentType + (currentUseQuick ? " + quickReply" : "")
+      });
+    }, ms);
+  }
+
+  function snippet() {
+    var ep = "https://api.line.me" + endpoint();
+    var body = JSON.stringify(payload(), null, 2);
+    if (state.snippetTab === "curl") {
+      return "curl -X POST " + ep + " \\\n  -H 'Authorization: Bearer $LINE_CHANNEL_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '" + body.replace(/\n/g, "\n  ") + "'";
+    }
+    return "// server-side only\nawait fetch(\"" + ep + "\", {\n  method: \"POST\",\n  headers: {\n    Authorization: `Bearer ${process.env.LINE_CHANNEL_TOKEN}`,\n    \"Content-Type\": \"application/json\"\n  },\n  body: JSON.stringify(" + body.replace(/\n/g, "\n  ") + ")\n});";
+  }
+
+  var isSingle = state.mode === "single", isMulti = state.mode === "multi", isBroadcast = state.mode === "broadcast";
+  var isText = state.type === "text", isSticker = state.type === "sticker", isImage = state.type === "image";
+  var done = state.logs.filter(function (l) { return l.latency !== "—"; });
+  var avg = done.length ? Math.round(done.reduce(function (a, l) { return a + parseInt(l.latency, 10); }, 0) / done.length) : 0;
+  var conn = state.conn === "ok"
+    ? { dot: C.green, label: "connected · " + state.channelId }
+    : state.conn === "fail"
+      ? { dot: C.redBright, label: "token ไม่ถูกต้อง" }
+      : { dot: C.dim2, label: "not verified" };
+
+  var modeSingle = chip(isSingle), modeMulti = chip(isMulti), modeBroad = chip(isBroadcast);
+  var tText = chip(isText), tSticker = chip(isSticker), tImage = chip(isImage);
+  var quickToggle = Object.assign({ label: state.useQuick ? "on" : "off" }, chip(state.useQuick));
+  var cCurl = chip(state.snippetTab === "curl"), cJs = chip(state.snippetTab === "js");
+  var hasResponse = !!state.last;
+  var sendBg = state.sending ? C.greenSlow : C.greenBright;
+  var sendLabel = state.sending ? "กำลังส่ง…" : (isBroadcast ? "ส่ง broadcast ทดสอบ" : "ส่งข้อความทดสอบ");
+
+  // ---- header ----
+  var header = h("header", {
+    style: { display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-end", justifyContent: "space-between", borderBottom: "1px solid " + C.border, paddingBottom: "16px" }
+  },
+    h("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } },
+      h("div", { style: { display: "flex", alignItems: "center", gap: "10px" } },
+        h("div", { style: { width: "26px", height: "26px", borderRadius: "8px", background: "oklch(0.75 0.15 160)", display: "grid", placeItems: "center", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: "14px", color: C.greenDark } }, "L"),
+        h("h1", { style: { margin: 0, fontSize: "20px", fontWeight: 600, letterSpacing: "-0.01em" } }, "LINE OA Notify Playground"),
+        h("span", { style: { fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: C.dim2, border: "1px solid " + "oklch(0.3 0.01 258)", borderRadius: "999px", padding: "2px 8px" } }, "v0.4 · sandbox")
+      ),
+      h("p", { style: { margin: 0, fontSize: "13px", color: C.dim3, maxWidth: "62ch" } }, "สนามทดลองสำหรับทีม dev — ยิงข้อความทดสอบเข้า LINE Official Account ก่อนนำ endpoint ไปต่อกับเว็บแอพอื่น")
+    ),
+    h("div", { style: { display: "flex", gap: "10px", flexWrap: "wrap" } },
+      h(StatCard, { label: "Requests", value: state.logs.length }),
+      h(StatCard, { label: "Success", value: state.logs.filter(function (l) { return l.status === "200"; }).length, color: C.green }),
+      h(StatCard, { label: "Avg latency", value: avg ? avg + "ms" : "—" })
+    )
+  );
+
+  // ---- connection bar ----
+  var connectionBar = h("section", {
+    style: Object.assign({}, panelStyle, { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end" })
+  },
+    h("div", { style: { display: "flex", flexDirection: "column", gap: "6px", flex: "1 1 340px" } },
+      h("label", { style: labelStyle }, "Channel access token"),
+      h("input", {
+        type: "password",
+        value: state.token,
+        onChange: function (e) { setState({ token: e.target.value, conn: "idle" }); },
+        placeholder: "วางค่า long-lived channel access token ที่นี่",
+        style: inputStyle
+      })
+    ),
+    h("div", { style: { display: "flex", flexDirection: "column", gap: "6px", flex: "0 1 200px" } },
+      h("label", { style: labelStyle }, "OA / Channel ID"),
+      h("input", {
+        value: state.channelId,
+        onChange: function (e) { setState({ channelId: e.target.value }); },
+        style: inputStyle
+      })
+    ),
+    h("button", {
+      onClick: function () { setState({ conn: state.token.trim().length > 8 ? "ok" : "fail" }); },
+      style: { border: "1px solid oklch(0.36 0.012 258)", background: "oklch(0.26 0.01 258)", color: C.text, borderRadius: "8px", padding: "10px 16px", fontSize: "13px", fontWeight: 500, cursor: "pointer" }
+    }, "ตรวจสอบการเชื่อมต่อ"),
+    h("div", { style: { display: "flex", alignItems: "center", gap: "8px", fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", paddingBottom: "10px" } },
+      h("span", { style: { width: "8px", height: "8px", borderRadius: "50%", background: conn.dot } }),
+      h("span", { style: { color: conn.dot } }, conn.label)
+    )
+  );
+
+  // ---- recipients section content ----
+  var recipientsBody = [];
+  if (isSingle) {
+    recipientsBody.push(h("div", { key: "single", style: { display: "flex", flexDirection: "column", gap: "6px" } },
+      h("label", { style: smallLabelStyle }, "userId ปลายทาง"),
+      h("input", {
+        value: state.singleId,
+        onChange: function (e) { setState({ singleId: e.target.value }); },
+        placeholder: "Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        style: Object.assign({}, inputStyle, { fontSize: "12.5px" })
+      })
+    ));
+  }
+  if (isMulti) {
+    recipientsBody.push(h("div", { key: "multi", style: { display: "flex", flexDirection: "column", gap: "6px" } },
+      h("label", { style: smallLabelStyle }, "userId ทีละบรรทัด (สูงสุด 500 ต่อ request)"),
+      h("textarea", {
+        value: state.multiIds,
+        onChange: function (e) { setState({ multiIds: e.target.value }); },
+        rows: 4,
+        style: Object.assign({}, inputStyle, { fontSize: "12.5px", resize: "vertical" })
+      }),
+      h("span", { style: { fontSize: "11.5px", color: C.dim4, fontFamily: "'JetBrains Mono', monospace" } }, targets().length + " recipients")
+    ));
+  }
+  if (isBroadcast) {
+    recipientsBody.push(h("div", { key: "broadcast", style: { border: "1px solid " + C.warnBorder, background: C.warnBg, borderRadius: "8px", padding: "10px 12px", fontSize: "12.5px", color: C.warnText } },
+      "โหมด broadcast ส่งถึงเพื่อนทุกคนของ OA และนับโควตาข้อความจริง — ใน sandbox ระบบจะจำลองผลลัพธ์เท่านั้น"
+    ));
+  }
+
+  // ---- message type body ----
+  var messageBody = [];
+  if (isText) {
+    messageBody.push(h("div", { key: "text", style: { display: "flex", flexDirection: "column", gap: "6px" } },
+      h("textarea", {
+        value: state.text,
+        onChange: function (e) { setState({ text: e.target.value }); },
+        rows: 5,
+        placeholder: "ข้อความแจ้งเตือน",
+        style: { background: C.inputBg, border: "1px solid " + C.inputBorder, borderRadius: "8px", padding: "11px 12px", color: C.text, fontSize: "13.5px", lineHeight: "1.55", resize: "vertical", width: "100%" }
+      }),
+      h("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "11.5px", color: C.dim4, fontFamily: "'JetBrains Mono', monospace" } },
+        h("span", null, state.text.length + " / 5000"),
+        h("span", null, "รองรับตัวแปร {{name}} จากฝั่งเรียกใช้")
+      )
+    ));
+  }
+  if (isSticker) {
+    messageBody.push(h("div", { key: "sticker", style: { display: "flex", flexDirection: "column", gap: "10px" } },
+      h("div", { style: { display: "flex", gap: "10px" } },
+        h("div", { style: { display: "flex", flexDirection: "column", gap: "6px", flex: 1 } },
+          h("label", { style: smallLabelStyle }, "packageId"),
+          h("input", { value: state.packageId, onChange: function (e) { setState({ packageId: e.target.value }); }, style: Object.assign({}, inputStyle, { padding: "9px 12px", fontSize: "12.5px" }) })
+        ),
+        h("div", { style: { display: "flex", flexDirection: "column", gap: "6px", flex: 1 } },
+          h("label", { style: smallLabelStyle }, "stickerId"),
+          h("input", { value: state.stickerId, onChange: function (e) { setState({ stickerId: e.target.value }); }, style: Object.assign({}, inputStyle, { padding: "9px 12px", fontSize: "12.5px" }) })
+        )
+      ),
+      h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+        STICKER_PRESETS.map(function (p) {
+          return h("button", {
+            key: p.label,
+            onClick: function () { setState({ packageId: p.p, stickerId: p.i }); },
+            style: { border: "1px solid oklch(0.33 0.01 258)", background: "oklch(0.24 0.01 258)", color: "oklch(0.82 0.008 258)", borderRadius: "8px", padding: "6px 10px", fontSize: "11.5px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }
+          }, p.label);
+        })
+      )
+    ));
+  }
+  if (isImage) {
+    messageBody.push(h("div", { key: "image", style: { display: "flex", flexDirection: "column", gap: "10px" } },
+      h("input", {
+        value: state.imageUrl,
+        onChange: function (e) { setState({ imageUrl: e.target.value }); },
+        placeholder: "https://cdn.example.com/notify.png (ต้องเป็น HTTPS)",
+        style: Object.assign({}, inputStyle, { fontSize: "12.5px" })
+      }),
+      h("div", {
+        style: {
+          height: "120px", borderRadius: "8px", border: "1px dashed oklch(0.36 0.012 258)",
+          backgroundImage: "repeating-linear-gradient(135deg, oklch(0.23 0.01 258) 0 8px, oklch(0.2 0.009 258) 8px 16px)",
+          display: "grid", placeItems: "center"
+        }
+      },
+        h("span", { style: { fontFamily: "'JetBrains Mono', monospace", fontSize: "11.5px", color: C.dim2 } }, "image preview · 1024×1024 max")
+      )
+    ));
+  }
+
+  // ---- quick reply body ----
+  var quickBody = null;
+  if (state.useQuick) {
+    quickBody = h("div", { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+      state.quick.map(function (q, i) {
+        return h("div", { key: q.id, style: { display: "flex", gap: "8px", alignItems: "center" } },
+          h("span", { style: { fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "oklch(0.55 0.01 258)", width: "16px" } }, i + 1),
+          h("input", {
+            value: q.label,
+            onChange: function (e) {
+              var v = e.target.value;
+              setState(function (st) { return { quick: st.quick.map(function (x) { return x.id === q.id ? { id: x.id, label: v } : x; }) }; });
+            },
+            placeholder: "ข้อความบนปุ่ม",
+            style: { flex: 1, background: C.inputBg, border: "1px solid " + C.inputBorder, borderRadius: "8px", padding: "8px 11px", color: C.text, fontSize: "13px" }
+          }),
+          h("button", {
+            onClick: function () { setState(function (st) { return { quick: st.quick.filter(function (x) { return x.id !== q.id; }) }; }); },
+            style: { border: "1px solid oklch(0.32 0.01 258)", background: "transparent", color: "oklch(0.68 0.1 25)", borderRadius: "8px", padding: "7px 10px", fontSize: "12px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }
+          }, "×")
+        );
+      }),
+      h("button", {
+        onClick: function () { setState(function (st) { return st.quick.length >= 4 ? {} : { quick: st.quick.concat({ id: Date.now(), label: "ปุ่มใหม่" }) }; }); },
+        style: { alignSelf: "flex-start", border: "1px dashed oklch(0.36 0.012 258)", background: "transparent", color: "oklch(0.72 0.01 258)", borderRadius: "8px", padding: "7px 12px", fontSize: "12px", cursor: "pointer" }
+      }, "+ เพิ่มปุ่ม (สูงสุด 4)")
+    );
+  }
+
+  var composer = h("section", { style: panelStyle },
+    h("h2", { style: sectionTitleStyle }, "1 · ผู้รับ (Recipients)"),
+    h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+      h("button", { onClick: function () { setState({ mode: "single" }); }, style: chipButtonStyle(modeSingle) }, "Push · 1 คน"),
+      h("button", { onClick: function () { setState({ mode: "multi" }); }, style: chipButtonStyle(modeMulti) }, "Multicast · กลุ่มทดสอบ"),
+      h("button", { onClick: function () { setState({ mode: "broadcast" }); }, style: chipButtonStyle(modeBroad) }, "Broadcast · ทุกคน")
+    ),
+    recipientsBody,
+    h("div", { style: { height: "1px", background: C.divider } }),
+    h("h2", { style: sectionTitleStyle }, "2 · ข้อความ (Message)"),
+    h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+      h("button", { onClick: function () { setState({ type: "text" }); }, style: chipButtonStyle(tText, { padding: "7px 12px", fontFamily: "'JetBrains Mono', monospace" }) }, "text"),
+      h("button", { onClick: function () { setState({ type: "sticker" }); }, style: chipButtonStyle(tSticker, { padding: "7px 12px", fontFamily: "'JetBrains Mono', monospace" }) }, "sticker"),
+      h("button", { onClick: function () { setState({ type: "image" }); }, style: chipButtonStyle(tImage, { padding: "7px 12px", fontFamily: "'JetBrains Mono', monospace" }) }, "image")
+    ),
+    messageBody,
+    h("div", { style: { height: "1px", background: C.divider } }),
+    h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
+      h("h2", { style: sectionTitleStyle }, "3 · Quick reply"),
+      h("button", {
+        onClick: function () { setState({ useQuick: !state.useQuick }); },
+        style: chipButtonStyle(quickToggle, { borderRadius: "999px", padding: "5px 12px", fontSize: "11.5px", fontFamily: "'JetBrains Mono', monospace" })
+      }, quickToggle.label)
+    ),
+    quickBody,
+    h("button", {
+      onClick: send,
+      disabled: state.sending,
+      style: { marginTop: "4px", border: "none", background: sendBg, color: C.greenDark, borderRadius: "10px", padding: "14px 18px", fontSize: "14.5px", fontWeight: 600, cursor: "pointer", letterSpacing: "0.01em" }
+    }, sendLabel)
+  );
+
+  // ---- preview panel ----
+  var previewBubble = isText
+    ? h("div", { style: { maxWidth: "78%", background: "oklch(0.86 0.15 150)", color: "oklch(0.24 0.03 150)", borderRadius: "14px 14px 4px 14px", padding: "10px 13px", fontSize: "13.5px", lineHeight: "1.5", whiteSpace: "pre-wrap" } }, state.text)
+    : isSticker
+      ? h("div", { style: { width: "96px", height: "96px", borderRadius: "12px", background: "oklch(0.94 0.01 258)", display: "grid", placeItems: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", color: "oklch(0.45 0.01 258)", textAlign: "center", padding: "6px" } }, "sticker", h("br"), state.packageId + "/" + state.stickerId)
+      : h("div", { style: { width: "150px", height: "110px", borderRadius: "12px", backgroundImage: "repeating-linear-gradient(135deg, oklch(0.9 0.01 258) 0 8px, oklch(0.84 0.01 258) 8px 16px)", display: "grid", placeItems: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", color: "oklch(0.42 0.01 258)" } }, "image");
+
+  var previewSection = h("section", { style: panelStyle },
+    h("h2", { style: sectionTitleStyle }, "Preview"),
+    h("div", { style: { background: "oklch(0.31 0.018 250)", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px", minHeight: "180px" } },
+      h("div", { style: { display: "flex", justifyContent: "flex-end" } }, previewBubble),
+      state.useQuick ? h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap", paddingTop: "4px" } },
+        state.quick.map(function (q) {
+          return h("span", { key: q.id, style: { background: "oklch(0.96 0.005 258)", color: "oklch(0.4 0.05 160)", borderRadius: "999px", padding: "7px 14px", fontSize: "12.5px", minHeight: "34px", display: "inline-flex", alignItems: "center" } }, q.label);
+        })
+      ) : null
+    )
+  );
+
+  // ---- payload / response ----
+  var payloadSection = h("section", { style: panelStyle },
+    h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" } },
+      h("h2", { style: sectionTitleStyle }, "Request payload"),
+      h("span", { style: { fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: C.dim2 } }, "POST " + endpoint())
+    ),
+    h("pre", { style: Object.assign({}, preStyle, { color: "oklch(0.84 0.02 160)", maxHeight: "240px" }) }, JSON.stringify(payload(), null, 2)),
+    hasResponse ? h("div", { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+      h("div", { style: { display: "flex", alignItems: "center", gap: "8px", fontFamily: "'JetBrains Mono', monospace", fontSize: "11.5px" } },
+        h("span", { style: { color: state.last.ok ? C.green : C.red } }, state.last.status),
+        h("span", { style: { color: C.dim2 } }, state.last.ms ? state.last.ms + "ms · " + endpoint() : endpoint())
+      ),
+      h("pre", { style: Object.assign({}, preStyle, { color: "oklch(0.8 0.01 258)", maxHeight: "160px" }) }, JSON.stringify(state.last.body, null, 2))
+    ) : null
+  );
+
+  // ---- code panel ----
+  var codeSection = h("section", { style: panelStyle },
+    h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" } },
+      h("h2", { style: sectionTitleStyle }, "นำไปใช้ในเว็บแอพอื่น"),
+      h("div", { style: { display: "flex", gap: "6px" } },
+        h("button", { onClick: function () { setState({ snippetTab: "curl" }); }, style: chipButtonStyle(cCurl, { borderRadius: "7px", padding: "5px 11px", fontSize: "11.5px", fontFamily: "'JetBrains Mono', monospace" }) }, "cURL"),
+        h("button", { onClick: function () { setState({ snippetTab: "js" }); }, style: chipButtonStyle(cJs, { borderRadius: "7px", padding: "5px 11px", fontSize: "11.5px", fontFamily: "'JetBrains Mono', monospace" }) }, "fetch")
+      )
+    ),
+    h("pre", { style: Object.assign({}, preStyle, { color: "oklch(0.86 0.008 258)", maxHeight: "260px", whiteSpace: "pre" }) }, snippet()),
+    h("p", { style: { margin: 0, fontSize: "12px", color: C.dim2 } }, "เรียกจาก backend เท่านั้น — อย่าให้ channel token หลุดไปอยู่ในโค้ดฝั่ง browser")
+  );
+
+  // ---- delivery log ----
+  var logSection = h("section", { style: panelStyle },
+    h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" } },
+      h("h2", { style: sectionTitleStyle }, "Delivery log"),
+      h("button", {
+        onClick: function () { setState({ logs: [], last: null }); },
+        style: { border: "1px solid oklch(0.32 0.01 258)", background: "transparent", color: "oklch(0.7 0.01 258)", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", cursor: "pointer" }
+      }, "ล้าง log")
+    ),
+    h("div", { style: { display: "grid", gridTemplateColumns: "84px 92px 1fr 92px 1fr", gap: "0 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", textTransform: "uppercase", letterSpacing: "0.06em", color: "oklch(0.56 0.01 258)", paddingBottom: "8px", borderBottom: "1px solid " + C.divider, minWidth: "640px" } },
+      h("span", null, "time"), h("span", null, "status"), h("span", null, "target"), h("span", null, "latency"), h("span", null, "detail")
+    ),
+    h("div", { style: { display: "flex", flexDirection: "column", overflowX: "auto" } },
+      state.logs.map(function (row) {
+        return h("div", {
+          key: row.id,
+          style: { display: "grid", gridTemplateColumns: "84px 92px 1fr 92px 1fr", gap: "0 12px", alignItems: "center", padding: "9px 0", borderBottom: "1px solid " + C.rowBorder, fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", minWidth: "640px" }
+        },
+          h("span", { style: { color: C.dim } }, row.time),
+          h("span", { style: { color: row.color } }, row.status),
+          h("span", { style: { color: "oklch(0.86 0.005 258)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, row.target),
+          h("span", { style: { color: "oklch(0.7 0.01 258)" } }, row.latency),
+          h("span", { style: { color: C.dim3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, row.detail)
+        );
+      })
+    ),
+    state.logs.length === 0 ? h("p", { style: { margin: "6px 0 0", fontSize: "12.5px", color: C.dim2 } }, "ยังไม่มี request — กดปุ่มส่งเพื่อเริ่มทดสอบ") : null
+  );
+
+  return h("div", { style: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'IBM Plex Sans Thai', system-ui, sans-serif", padding: "20px 22px 40px", display: "flex", flexDirection: "column", gap: "18px" } },
+    header,
+    connectionBar,
+    h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: "18px", alignItems: "start" } },
+      composer,
+      h("div", { style: { display: "flex", flexDirection: "column", gap: "18px" } }, previewSection, payloadSection, codeSection)
+    ),
+    logSection
+  );
+}
+
+var root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(h(App));
+})();
+</script>
+</body>
+</html>

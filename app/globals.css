@@ -1,0 +1,9 @@
+html, body { height: 100%; margin: 0; background: oklch(0.17 0.008 258); }
+* { box-sizing: border-box; }
+a { color: oklch(0.78 0.13 165); text-decoration: none; }
+a:hover { color: oklch(0.88 0.11 165); }
+input, textarea, button, select { font: inherit; }
+input:focus, textarea:focus { outline: 1px solid oklch(0.72 0.12 165); }
+::placeholder { color: oklch(0.52 0.01 258); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: oklch(0.34 0.012 258); border-radius: 10px; }
