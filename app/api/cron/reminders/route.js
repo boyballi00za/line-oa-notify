@@ -21,6 +21,12 @@ function renderTemplate(template, vars) {
 // whose due date is exactly N days out — where N is one of the reminder's
 // remind_before_days — sends the notification once, tracked in
 // reminder_sends so a reminder is never double-sent for the same offset.
+//
+// ?force=1 bypasses the date check and sends every active reminder right
+// now, for demoing/testing. It intentionally skips the reminder_sends
+// dedup table so it's safe to re-run repeatedly without corrupting the real
+// daily-cron bookkeeping — use only with test data, since it will message
+// every registered userId immediately regardless of their real due date.
 export async function GET(request) {
   const cronSecret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
@@ -33,6 +39,7 @@ export async function GET(request) {
     return NextResponse.json({ error: "LINE_CHANNEL_ACCESS_TOKEN is not set on the server" }, { status: 500 });
   }
 
+  const force = new URL(request.url).searchParams.get("force") === "1";
   const supabase = getSupabase();
   const today = bangkokTodayStr();
 
@@ -45,16 +52,19 @@ export async function GET(request) {
 
   for (const reminder of reminders || []) {
     const daysLeft = daysUntil(reminder.due_date, today);
-    const dueToday = Array.isArray(reminder.remind_before_days) && reminder.remind_before_days.includes(daysLeft);
-    if (!dueToday) continue;
 
-    const { data: existing } = await supabase
-      .from("reminder_sends")
-      .select("id")
-      .eq("reminder_id", reminder.id)
-      .eq("days_before", daysLeft)
-      .maybeSingle();
-    if (existing) continue;
+    if (!force) {
+      const dueToday = Array.isArray(reminder.remind_before_days) && reminder.remind_before_days.includes(daysLeft);
+      if (!dueToday) continue;
+
+      const { data: existing } = await supabase
+        .from("reminder_sends")
+        .select("id")
+        .eq("reminder_id", reminder.id)
+        .eq("days_before", daysLeft)
+        .maybeSingle();
+      if (existing) continue;
+    }
 
     const text = renderTemplate(reminder.message_template, {
       title: reminder.title,
@@ -72,17 +82,17 @@ export async function GET(request) {
       statusCode: sendResult.statusCode,
       statusText: sendResult.statusText,
       latencyMs: sendResult.ms,
-      detail: sendResult.ok ? `reminder: ${reminder.title} (${daysLeft}d)` : sendResult.responseBody?.message || "reminder send failed",
+      detail: sendResult.ok ? `reminder${force ? " (forced)" : ""}: ${reminder.title} (${daysLeft}d)` : sendResult.responseBody?.message || "reminder send failed",
       payload: sendResult.payload,
       response: sendResult.responseBody
     });
 
-    if (sendResult.ok) {
+    if (sendResult.ok && !force) {
       await supabase.from("reminder_sends").insert({ reminder_id: reminder.id, days_before: daysLeft });
     }
 
     results.push({ reminderId: reminder.id, title: reminder.title, daysLeft, ok: sendResult.ok });
   }
 
-  return NextResponse.json({ checked: (reminders || []).length, sent: results.length, results });
+  return NextResponse.json({ checked: (reminders || []).length, sent: results.length, forced: force, results });
 }
