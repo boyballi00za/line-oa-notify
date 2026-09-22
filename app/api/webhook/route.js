@@ -39,9 +39,20 @@ export async function POST(request) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (token) {
     for (const event of events) {
-      const isGreetable = event.type === "message" || event.type === "follow";
-      if (!isGreetable || !event.replyToken || !event.source?.userId) continue;
-      await sendLineReply(token, event.replyToken, `User ID ของคุณคือ: ${event.source.userId}`);
+      if (!event.replyToken || !event.source?.userId) continue;
+      if (event.type === "follow") {
+        await sendLineReply(
+          token,
+          event.replyToken,
+          "หวัดดีค่ะ 🐣💛 ยินดีต้อนรับเข้าสู่ครอบครัว ThaiTax นะคะ~ หนูเป็นผู้ช่วยตัวน้อยที่จะคอยเตือนเรื่องภาษีให้ค่ะ ✨ แค่เปิดแอพ ThaiTax แล้วกดเชื่อมต่อ LINE ไว้ หนูจะรีบมาบอกก่อนถึงกำหนดยื่นภาษีเองเลย ไม่ต้องพิมพ์อะไรเพิ่มนะคะ 🥰"
+        );
+      } else if (event.type === "message") {
+        await sendLineReply(
+          token,
+          event.replyToken,
+          "อุ๊ยย~ หนูเป็นแค่บอทตัวจิ๋ว พิมพ์ตอบไม่เก่งค่ะ 🙈💭 ถ้าอยากตั้งค่าการแจ้งเตือนภาษี ไปหากันที่แอพ ThaiTax แล้วกดเชื่อมต่อ LINE ได้เลยนะคะ เดี๋ยวหนูจะแจ้งให้ทันเวลาแน่นอน 📅💕"
+        );
+      }
     }
   }
 
